@@ -2111,6 +2111,19 @@ where
 
 use std::ops::{Index, IndexMut};
 
+impl<'a, K, V, S> Index<usize> for IndexMap<K, V, S>
+where
+    K: Hash + Eq,
+    S: BuildHasher,
+{
+    type Output = K;
+
+    /// ***Panics*** if `index` if not present in the map.
+    fn index(&self, index: usize) -> &K {
+        self.core.entries[index].key_ref()
+    }
+}
+
 impl<'a, K, V, Q: ?Sized, S> Index<&'a Q> for IndexMap<K, V, S>
 where
     Q: Hash + Equivalent<K>,
