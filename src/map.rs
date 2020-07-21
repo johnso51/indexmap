@@ -1001,8 +1001,6 @@ where
     }
 }
 
-use std::ops::{Index, IndexMut};
-
 impl<'a, K, V, S> Index<usize> for IndexMap<K, V, S>
 where
     K: Hash + Eq,
@@ -1012,7 +1010,7 @@ where
 
     /// ***Panics*** if `index` if not present in the map.
     fn index(&self, index: usize) -> &K {
-        self.core.entries[index].key_ref()
+        self.core.as_entries()[index].key_ref()
     }
 }
 
