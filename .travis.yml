@@ -2,11 +2,8 @@ language: rust
 sudo: false
 matrix:
   include:
-    # MSRV is lower for non-dev builds
-    - rust: 1.18.0
-      env:
-       - SKIP_TEST=1
-    - rust: 1.30.0
+    - rust: 1.32.0
+    - rust: 1.34.2
     - rust: stable
       env:
        - FEATURES='serde-1'
@@ -45,6 +42,10 @@ script:
       if [ -z "$SKIP_TEST" ]; then
         cargo test --verbose --features "$FEATURES" &&
         cargo test --release --verbose --features "$FEATURES"
+        if [ "$FEATURES" = "serde-1" ]; then
+          cargo test --verbose -p test-serde &&
+          cargo test --release --verbose -p test-serde
+        fi
       fi &&
       if [ -n "$TEST_BENCH" ]; then
         cargo test -v --benches --no-run --features "$FEATURES"
