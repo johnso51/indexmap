@@ -684,6 +684,26 @@ impl<K, V, S> IndexMap<K, V, S> {
         self.as_entries().get(index).map(Bucket::refs)
     }
 
+    /// Get the key at index.
+    ///
+    /// This functions like `map[index]`, but returning the the key instead of the value.
+    ///
+    ///```
+    /// use indexmap::IndexMap;
+    ///
+    /// let mut map = IndexMap::new();
+    /// map.insert("first", "value1");
+    /// map.insert("second", "value2");
+    ///
+    /// assert_eq!(map.index_key(0), &"first");
+    /// assert_eq!(map.index_key(1), &"second");
+    ///```
+    pub fn index_key(&self, index: usize) -> &K {
+        self.get_index(index)
+            .expect("IndexMap: index out of bounds")
+            .0
+    }
+
     /// Get a key-value pair by index
     ///
     /// Valid indices are *0 <= index < self.len()*
