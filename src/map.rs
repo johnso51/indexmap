@@ -13,7 +13,7 @@ use ::core::cmp::Ordering;
 use ::core::fmt;
 use ::core::hash::{BuildHasher, Hash, Hasher};
 use ::core::iter::FromIterator;
-use ::core::ops::{Index, IndexMut, RangeFull};
+use ::core::ops::{Index, IndexMut, RangeBounds};
 use ::core::slice::{Iter as SliceIter, IterMut as SliceIterMut};
 
 #[cfg(has_std)]
@@ -125,9 +125,8 @@ impl<K, V, S> Entries for IndexMap<K, V, S> {
 
 impl<K, V, S> fmt::Debug for IndexMap<K, V, S>
 where
-    K: fmt::Debug + Hash + Eq,
+    K: fmt::Debug,
     V: fmt::Debug,
-    S: BuildHasher,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if cfg!(not(feature = "test_debug")) {
@@ -165,10 +164,7 @@ impl<K, V, S> IndexMap<K, V, S> {
     ///
     /// Computes in **O(n)** time.
     #[inline]
-    pub fn with_capacity_and_hasher(n: usize, hash_builder: S) -> Self
-    where
-        S: BuildHasher,
-    {
+    pub fn with_capacity_and_hasher(n: usize, hash_builder: S) -> Self {
         if n == 0 {
             IndexMap {
                 core: IndexMapCore::new(),
@@ -180,6 +176,21 @@ impl<K, V, S> IndexMap<K, V, S> {
                 hash_builder,
             }
         }
+    }
+
+    /// Create a new map with `hash_builder`
+    pub fn with_hasher(hash_builder: S) -> Self {
+        Self::with_capacity_and_hasher(0, hash_builder)
+    }
+
+    /// Computes in **O(1)** time.
+    pub fn capacity(&self) -> usize {
+        self.core.capacity()
+    }
+
+    /// Return a reference to the map's `BuildHasher`.
+    pub fn hasher(&self) -> &S {
+        &self.hash_builder
     }
 
     /// Return the number of key-value pairs in the map.
@@ -198,25 +209,69 @@ impl<K, V, S> IndexMap<K, V, S> {
         self.len() == 0
     }
 
-    /// Create a new map with `hash_builder`
-    pub fn with_hasher(hash_builder: S) -> Self
-    where
-        S: BuildHasher,
-    {
-        Self::with_capacity_and_hasher(0, hash_builder)
+    /// Return an iterator over the key-value pairs of the map, in their order
+    pub fn iter(&self) -> Iter<'_, K, V> {
+        Iter {
+            iter: self.as_entries().iter(),
+        }
     }
 
-    /// Return a reference to the map's `BuildHasher`.
-    pub fn hasher(&self) -> &S
-    where
-        S: BuildHasher,
-    {
-        &self.hash_builder
+    /// Return an iterator over the key-value pairs of the map, in their order
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
+        IterMut {
+            iter: self.as_entries_mut().iter_mut(),
+        }
     }
 
-    /// Computes in **O(1)** time.
-    pub fn capacity(&self) -> usize {
-        self.core.capacity()
+    /// Return an iterator over the keys of the map, in their order
+    pub fn keys(&self) -> Keys<'_, K, V> {
+        Keys {
+            iter: self.as_entries().iter(),
+        }
+    }
+
+    /// Return an iterator over the values of the map, in their order
+    pub fn values(&self) -> Values<'_, K, V> {
+        Values {
+            iter: self.as_entries().iter(),
+        }
+    }
+
+    /// Return an iterator over mutable references to the the values of the map,
+    /// in their order
+    pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
+        ValuesMut {
+            iter: self.as_entries_mut().iter_mut(),
+        }
+    }
+
+    /// Remove all key-value pairs in the map, while preserving its capacity.
+    ///
+    /// Computes in **O(n)** time.
+    pub fn clear(&mut self) {
+        self.core.clear();
+    }
+
+    /// Clears the `IndexMap` in the given index range, returning those
+    /// key-value pairs as a drain iterator.
+    ///
+    /// The range may be any type that implements `RangeBounds<usize>`,
+    /// including all of the `std::ops::Range*` types, or even a tuple pair of
+    /// `Bound` start and end values. To drain the map entirely, use `RangeFull`
+    /// like `map.drain(..)`.
+    ///
+    /// This shifts down all entries following the drained range to fill the
+    /// gap, and keeps the allocated memory for reuse.
+    ///
+    /// ***Panics*** if the starting point is greater than the end point or if
+    /// the end point is greater than the length of the map.
+    pub fn drain<R>(&mut self, range: R) -> Drain<'_, K, V>
+    where
+        R: RangeBounds<usize>,
+    {
+        Drain {
+            iter: self.core.drain(range),
+        }
     }
 }
 
@@ -225,13 +280,6 @@ where
     K: Hash + Eq,
     S: BuildHasher,
 {
-    /// Remove all key-value pairs in the map, while preserving its capacity.
-    ///
-    /// Computes in **O(n)** time.
-    pub fn clear(&mut self) {
-        self.core.clear();
-    }
-
     /// Reserve capacity for `additional` more key-value pairs.
     ///
     /// Computes in **O(n)** time.
@@ -294,42 +342,6 @@ where
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
         let hash = self.hash(&key);
         self.core.entry(hash, key)
-    }
-
-    /// Return an iterator over the key-value pairs of the map, in their order
-    pub fn iter(&self) -> Iter<'_, K, V> {
-        Iter {
-            iter: self.as_entries().iter(),
-        }
-    }
-
-    /// Return an iterator over the key-value pairs of the map, in their order
-    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
-        IterMut {
-            iter: self.as_entries_mut().iter_mut(),
-        }
-    }
-
-    /// Return an iterator over the keys of the map, in their order
-    pub fn keys(&self) -> Keys<'_, K, V> {
-        Keys {
-            iter: self.as_entries().iter(),
-        }
-    }
-
-    /// Return an iterator over the values of the map, in their order
-    pub fn values(&self) -> Values<'_, K, V> {
-        Values {
-            iter: self.as_entries().iter(),
-        }
-    }
-
-    /// Return an iterator over mutable references to the the values of the map,
-    /// in their order
-    pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
-        ValuesMut {
-            iter: self.as_entries_mut().iter_mut(),
-        }
     }
 
     /// Return `true` if an equivalent to `key` exists in the map.
@@ -660,14 +672,6 @@ where
     pub fn reverse(&mut self) {
         self.core.reverse()
     }
-
-    /// Clears the `IndexMap`, returning all key-value pairs as a drain iterator.
-    /// Keeps the allocated memory for reuse.
-    pub fn drain(&mut self, range: RangeFull) -> Drain<'_, K, V> {
-        Drain {
-            iter: self.core.drain(range),
-        }
-    }
 }
 
 impl<K, V, S> IndexMap<K, V, S> {
@@ -733,28 +737,28 @@ impl<'a, K, V> Iterator for Keys<'a, K, V> {
     iterator_methods!(Bucket::key_ref);
 }
 
-impl<'a, K, V> DoubleEndedIterator for Keys<'a, K, V> {
-    fn next_back(&mut self) -> Option<&'a K> {
+impl<K, V> DoubleEndedIterator for Keys<'_, K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
         self.iter.next_back().map(Bucket::key_ref)
     }
 }
 
-impl<'a, K, V> ExactSizeIterator for Keys<'a, K, V> {
+impl<K, V> ExactSizeIterator for Keys<'_, K, V> {
     fn len(&self) -> usize {
         self.iter.len()
     }
 }
 
 // FIXME(#26925) Remove in favor of `#[derive(Clone)]`
-impl<'a, K, V> Clone for Keys<'a, K, V> {
-    fn clone(&self) -> Keys<'a, K, V> {
+impl<K, V> Clone for Keys<'_, K, V> {
+    fn clone(&self) -> Self {
         Keys {
             iter: self.iter.clone(),
         }
     }
 }
 
-impl<'a, K: fmt::Debug, V> fmt::Debug for Keys<'a, K, V> {
+impl<K: fmt::Debug, V> fmt::Debug for Keys<'_, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
     }
@@ -777,28 +781,28 @@ impl<'a, K, V> Iterator for Values<'a, K, V> {
     iterator_methods!(Bucket::value_ref);
 }
 
-impl<'a, K, V> DoubleEndedIterator for Values<'a, K, V> {
+impl<K, V> DoubleEndedIterator for Values<'_, K, V> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.iter.next_back().map(Bucket::value_ref)
     }
 }
 
-impl<'a, K, V> ExactSizeIterator for Values<'a, K, V> {
+impl<K, V> ExactSizeIterator for Values<'_, K, V> {
     fn len(&self) -> usize {
         self.iter.len()
     }
 }
 
 // FIXME(#26925) Remove in favor of `#[derive(Clone)]`
-impl<'a, K, V> Clone for Values<'a, K, V> {
-    fn clone(&self) -> Values<'a, K, V> {
+impl<K, V> Clone for Values<'_, K, V> {
+    fn clone(&self) -> Self {
         Values {
             iter: self.iter.clone(),
         }
     }
 }
 
-impl<'a, K, V: fmt::Debug> fmt::Debug for Values<'a, K, V> {
+impl<K, V: fmt::Debug> fmt::Debug for Values<'_, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
     }
@@ -821,13 +825,13 @@ impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
     iterator_methods!(Bucket::value_mut);
 }
 
-impl<'a, K, V> DoubleEndedIterator for ValuesMut<'a, K, V> {
+impl<K, V> DoubleEndedIterator for ValuesMut<'_, K, V> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.iter.next_back().map(Bucket::value_mut)
     }
 }
 
-impl<'a, K, V> ExactSizeIterator for ValuesMut<'a, K, V> {
+impl<K, V> ExactSizeIterator for ValuesMut<'_, K, V> {
     fn len(&self) -> usize {
         self.iter.len()
     }
@@ -850,28 +854,28 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
     iterator_methods!(Bucket::refs);
 }
 
-impl<'a, K, V> DoubleEndedIterator for Iter<'a, K, V> {
+impl<K, V> DoubleEndedIterator for Iter<'_, K, V> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.iter.next_back().map(Bucket::refs)
     }
 }
 
-impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {
+impl<K, V> ExactSizeIterator for Iter<'_, K, V> {
     fn len(&self) -> usize {
         self.iter.len()
     }
 }
 
 // FIXME(#26925) Remove in favor of `#[derive(Clone)]`
-impl<'a, K, V> Clone for Iter<'a, K, V> {
-    fn clone(&self) -> Iter<'a, K, V> {
+impl<K, V> Clone for Iter<'_, K, V> {
+    fn clone(&self) -> Self {
         Iter {
             iter: self.iter.clone(),
         }
     }
 }
 
-impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for Iter<'a, K, V> {
+impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for Iter<'_, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
     }
@@ -894,13 +898,13 @@ impl<'a, K, V> Iterator for IterMut<'a, K, V> {
     iterator_methods!(Bucket::ref_mut);
 }
 
-impl<'a, K, V> DoubleEndedIterator for IterMut<'a, K, V> {
+impl<K, V> DoubleEndedIterator for IterMut<'_, K, V> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.iter.next_back().map(Bucket::ref_mut)
     }
 }
 
-impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V> {
+impl<K, V> ExactSizeIterator for IterMut<'_, K, V> {
     fn len(&self) -> usize {
         self.iter.len()
     }
@@ -923,7 +927,7 @@ impl<K, V> Iterator for IntoIter<K, V> {
     iterator_methods!(Bucket::key_value);
 }
 
-impl<'a, K, V> DoubleEndedIterator for IntoIter<K, V> {
+impl<K, V> DoubleEndedIterator for IntoIter<K, V> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.iter.next_back().map(Bucket::key_value)
     }
@@ -953,21 +957,17 @@ pub struct Drain<'a, K, V> {
     pub(crate) iter: vec::Drain<'a, Bucket<K, V>>,
 }
 
-impl<'a, K, V> Iterator for Drain<'a, K, V> {
+impl<K, V> Iterator for Drain<'_, K, V> {
     type Item = (K, V);
 
     iterator_methods!(Bucket::key_value);
 }
 
-impl<'a, K, V> DoubleEndedIterator for Drain<'a, K, V> {
+impl<K, V> DoubleEndedIterator for Drain<'_, K, V> {
     double_ended_iterator_methods!(Bucket::key_value);
 }
 
-impl<'a, K, V, S> IntoIterator for &'a IndexMap<K, V, S>
-where
-    K: Hash + Eq,
-    S: BuildHasher,
-{
+impl<'a, K, V, S> IntoIterator for &'a IndexMap<K, V, S> {
     type Item = (&'a K, &'a V);
     type IntoIter = Iter<'a, K, V>;
     fn into_iter(self) -> Self::IntoIter {
@@ -975,11 +975,7 @@ where
     }
 }
 
-impl<'a, K, V, S> IntoIterator for &'a mut IndexMap<K, V, S>
-where
-    K: Hash + Eq,
-    S: BuildHasher,
-{
+impl<'a, K, V, S> IntoIterator for &'a mut IndexMap<K, V, S> {
     type Item = (&'a K, &'a mut V);
     type IntoIter = IterMut<'a, K, V>;
     fn into_iter(self) -> Self::IntoIter {
@@ -987,11 +983,7 @@ where
     }
 }
 
-impl<K, V, S> IntoIterator for IndexMap<K, V, S>
-where
-    K: Hash + Eq,
-    S: BuildHasher,
-{
+impl<K, V, S> IntoIterator for IndexMap<K, V, S> {
     type Item = (K, V);
     type IntoIter = IntoIter<K, V>;
     fn into_iter(self) -> Self::IntoIter {
@@ -1001,20 +993,29 @@ where
     }
 }
 
-impl<'a, K, V, S> Index<usize> for IndexMap<K, V, S>
-where
-    K: Hash + Eq,
-    S: BuildHasher,
-{
-    type Output = K;
-
-    /// ***Panics*** if `index` if not present in the map.
-    fn index(&self, index: usize) -> &K {
-        self.core.as_entries()[index].key_ref()
-    }
-}
-
-impl<'a, K, V, Q: ?Sized, S> Index<&'a Q> for IndexMap<K, V, S>
+/// Access `IndexMap` values corresponding to a key.
+///
+/// # Examples
+///
+/// ```
+/// use indexmap::IndexMap;
+///
+/// let mut map = IndexMap::new();
+/// for word in "Lorem ipsum dolor sit amet".split_whitespace() {
+///     map.insert(word.to_lowercase(), word.to_uppercase());
+/// }
+/// assert_eq!(map["lorem"], "LOREM");
+/// assert_eq!(map["ipsum"], "IPSUM");
+/// ```
+///
+/// ```should_panic
+/// use indexmap::IndexMap;
+///
+/// let mut map = IndexMap::new();
+/// map.insert("foo", 1);
+/// println!("{:?}", map["bar"]); // panics!
+/// ```
+impl<K, V, Q: ?Sized, S> Index<&Q> for IndexMap<K, V, S>
 where
     Q: Hash + Equivalent<K>,
     K: Hash + Eq,
@@ -1022,25 +1023,135 @@ where
 {
     type Output = V;
 
+    /// Returns a reference to the value corresponding to the supplied `key`.
+    ///
     /// ***Panics*** if `key` is not present in the map.
-    fn index(&self, key: &'a Q) -> &V {
+    fn index(&self, key: &Q) -> &V {
         self.get(key).expect("IndexMap: key not found")
     }
 }
 
+/// Access `IndexMap` values corresponding to a key.
+///
 /// Mutable indexing allows changing / updating values of key-value
 /// pairs that are already present.
 ///
 /// You can **not** insert new pairs with index syntax, use `.insert()`.
-impl<'a, K, V, Q: ?Sized, S> IndexMut<&'a Q> for IndexMap<K, V, S>
+///
+/// # Examples
+///
+/// ```
+/// use indexmap::IndexMap;
+///
+/// let mut map = IndexMap::new();
+/// for word in "Lorem ipsum dolor sit amet".split_whitespace() {
+///     map.insert(word.to_lowercase(), word.to_string());
+/// }
+/// let lorem = &mut map["lorem"];
+/// assert_eq!(lorem, "Lorem");
+/// lorem.retain(char::is_lowercase);
+/// assert_eq!(map["lorem"], "orem");
+/// ```
+///
+/// ```should_panic
+/// use indexmap::IndexMap;
+///
+/// let mut map = IndexMap::new();
+/// map.insert("foo", 1);
+/// map["bar"] = 1; // panics!
+/// ```
+impl<K, V, Q: ?Sized, S> IndexMut<&Q> for IndexMap<K, V, S>
 where
     Q: Hash + Equivalent<K>,
     K: Hash + Eq,
     S: BuildHasher,
 {
+    /// Returns a mutable reference to the value corresponding to the supplied `key`.
+    ///
     /// ***Panics*** if `key` is not present in the map.
-    fn index_mut(&mut self, key: &'a Q) -> &mut V {
+    fn index_mut(&mut self, key: &Q) -> &mut V {
         self.get_mut(key).expect("IndexMap: key not found")
+    }
+}
+
+/// Access `IndexMap` values at indexed positions.
+///
+/// # Examples
+///
+/// ```
+/// use indexmap::IndexMap;
+///
+/// let mut map = IndexMap::new();
+/// for word in "Lorem ipsum dolor sit amet".split_whitespace() {
+///     map.insert(word.to_lowercase(), word.to_uppercase());
+/// }
+/// assert_eq!(map[0], "LOREM");
+/// assert_eq!(map[1], "IPSUM");
+/// map.reverse();
+/// assert_eq!(map[0], "AMET");
+/// assert_eq!(map[1], "SIT");
+/// map.sort_keys();
+/// assert_eq!(map[0], "AMET");
+/// assert_eq!(map[1], "DOLOR");
+/// ```
+///
+/// ```should_panic
+/// use indexmap::IndexMap;
+///
+/// let mut map = IndexMap::new();
+/// map.insert("foo", 1);
+/// println!("{:?}", map[10]); // panics!
+/// ```
+impl<K, V, S> Index<usize> for IndexMap<K, V, S> {
+    type Output = V;
+
+    /// Returns a reference to the value at the supplied `index`.
+    ///
+    /// ***Panics*** if `index` is out of bounds.
+    fn index(&self, index: usize) -> &V {
+        self.get_index(index)
+            .expect("IndexMap: index out of bounds")
+            .1
+    }
+}
+
+/// Access `IndexMap` values at indexed positions.
+///
+/// Mutable indexing allows changing / updating indexed values
+/// that are already present.
+///
+/// You can **not** insert new values with index syntax, use `.insert()`.
+///
+/// # Examples
+///
+/// ```
+/// use indexmap::IndexMap;
+///
+/// let mut map = IndexMap::new();
+/// for word in "Lorem ipsum dolor sit amet".split_whitespace() {
+///     map.insert(word.to_lowercase(), word.to_string());
+/// }
+/// let lorem = &mut map[0];
+/// assert_eq!(lorem, "Lorem");
+/// lorem.retain(char::is_lowercase);
+/// assert_eq!(map["lorem"], "orem");
+/// ```
+///
+/// ```should_panic
+/// use indexmap::IndexMap;
+///
+/// let mut map = IndexMap::new();
+/// map.insert("foo", 1);
+/// map[10] = 1; // panics!
+/// ```
+impl<K, V, S> IndexMut<usize> for IndexMap<K, V, S> {
+    /// Returns a mutable reference to the value at the supplied `index`.
+    ///
+    /// ***Panics*** if `index` is out of bounds.
+    fn index_mut(&mut self, index: usize) -> &mut V {
+        self.get_index_mut(index)
+            .expect("IndexMap: index out of bounds")
+            .1
     }
 }
 
@@ -1112,7 +1223,7 @@ where
 
 impl<K, V, S> Default for IndexMap<K, V, S>
 where
-    S: BuildHasher + Default,
+    S: Default,
 {
     /// Return an empty `IndexMap`
     fn default() -> Self {

@@ -22,8 +22,7 @@ type Bucket<T> = crate::Bucket<T, ()>;
 /// Requires crate feature `"rayon"`.
 impl<T, S> IntoParallelIterator for IndexSet<T, S>
 where
-    T: Hash + Eq + Send,
-    S: BuildHasher,
+    T: Send,
 {
     type Item = T;
     type Iter = IntoParIter<T>;
@@ -66,8 +65,7 @@ impl<T: Send> IndexedParallelIterator for IntoParIter<T> {
 /// Requires crate feature `"rayon"`.
 impl<'a, T, S> IntoParallelIterator for &'a IndexSet<T, S>
 where
-    T: Hash + Eq + Sync,
-    S: BuildHasher,
+    T: Sync,
 {
     type Item = &'a T;
     type Iter = ParIter<'a, T>;
@@ -90,13 +88,13 @@ pub struct ParIter<'a, T> {
     entries: &'a [Bucket<T>],
 }
 
-impl<'a, T> Clone for ParIter<'a, T> {
+impl<T> Clone for ParIter<'_, T> {
     fn clone(&self) -> Self {
         ParIter { ..*self }
     }
 }
 
-impl<'a, T: fmt::Debug> fmt::Debug for ParIter<'a, T> {
+impl<T: fmt::Debug> fmt::Debug for ParIter<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let iter = self.entries.iter().map(Bucket::key_ref);
         f.debug_list().entries(iter).finish()
@@ -109,7 +107,7 @@ impl<'a, T: Sync> ParallelIterator for ParIter<'a, T> {
     parallel_iterator_methods!(Bucket::key_ref);
 }
 
-impl<'a, T: Sync> IndexedParallelIterator for ParIter<'a, T> {
+impl<T: Sync> IndexedParallelIterator for ParIter<'_, T> {
     indexed_parallel_iterator_methods!(Bucket::key_ref);
 }
 
@@ -246,13 +244,13 @@ pub struct ParDifference<'a, T, S1, S2> {
     set2: &'a IndexSet<T, S2>,
 }
 
-impl<'a, T, S1, S2> Clone for ParDifference<'a, T, S1, S2> {
+impl<T, S1, S2> Clone for ParDifference<'_, T, S1, S2> {
     fn clone(&self) -> Self {
         ParDifference { ..*self }
     }
 }
 
-impl<'a, T, S1, S2> fmt::Debug for ParDifference<'a, T, S1, S2>
+impl<T, S1, S2> fmt::Debug for ParDifference<'_, T, S1, S2>
 where
     T: fmt::Debug + Eq + Hash,
     S1: BuildHasher,
@@ -297,13 +295,13 @@ pub struct ParIntersection<'a, T, S1, S2> {
     set2: &'a IndexSet<T, S2>,
 }
 
-impl<'a, T, S1, S2> Clone for ParIntersection<'a, T, S1, S2> {
+impl<T, S1, S2> Clone for ParIntersection<'_, T, S1, S2> {
     fn clone(&self) -> Self {
         ParIntersection { ..*self }
     }
 }
 
-impl<'a, T, S1, S2> fmt::Debug for ParIntersection<'a, T, S1, S2>
+impl<T, S1, S2> fmt::Debug for ParIntersection<'_, T, S1, S2>
 where
     T: fmt::Debug + Eq + Hash,
     S1: BuildHasher,
@@ -348,13 +346,13 @@ pub struct ParSymmetricDifference<'a, T, S1, S2> {
     set2: &'a IndexSet<T, S2>,
 }
 
-impl<'a, T, S1, S2> Clone for ParSymmetricDifference<'a, T, S1, S2> {
+impl<T, S1, S2> Clone for ParSymmetricDifference<'_, T, S1, S2> {
     fn clone(&self) -> Self {
         ParSymmetricDifference { ..*self }
     }
 }
 
-impl<'a, T, S1, S2> fmt::Debug for ParSymmetricDifference<'a, T, S1, S2>
+impl<T, S1, S2> fmt::Debug for ParSymmetricDifference<'_, T, S1, S2>
 where
     T: fmt::Debug + Eq + Hash,
     S1: BuildHasher,
@@ -399,13 +397,13 @@ pub struct ParUnion<'a, T, S1, S2> {
     set2: &'a IndexSet<T, S2>,
 }
 
-impl<'a, T, S1, S2> Clone for ParUnion<'a, T, S1, S2> {
+impl<T, S1, S2> Clone for ParUnion<'_, T, S1, S2> {
     fn clone(&self) -> Self {
         ParUnion { ..*self }
     }
 }
 
-impl<'a, T, S1, S2> fmt::Debug for ParUnion<'a, T, S1, S2>
+impl<T, S1, S2> fmt::Debug for ParUnion<'_, T, S1, S2>
 where
     T: fmt::Debug + Eq + Hash,
     S1: BuildHasher,
